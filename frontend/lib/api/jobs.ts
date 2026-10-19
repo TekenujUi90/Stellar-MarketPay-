@@ -1,5 +1,12 @@
 import { api } from "./client";
 import type { Job, JobAnalytics, BulkActionResponse } from "@/utils/types";
+import type { paths, components } from "./schema";
+
+export type ApiJob = components["schemas"]["Job"];
+export type ApiJobsResponse = paths["/api/jobs"]["get"]["responses"][200]["content"]["application/json"];
+export type ApiJobDetailResponse = { success?: boolean; data: ApiJob };
+export type ApiCreateJobResponse = paths["/api/jobs"]["post"]["responses"][201]["content"]["application/json"];
+export type ApiClientJobsResponse = { success?: boolean; data: ApiJob[] };
 
 export async function fetchJobs(params?: {
   category?: string;
@@ -28,12 +35,12 @@ export async function fetchJobs(params?: {
     ...rest
   } = params || {};
 
-  const { data } = await api.get<{
-    success: boolean;
+  const { data } = await api.get<ApiJobsResponse & {
     data: Job[];
-    next_cursor: string | null;
-    nextCursor: string | null;
-    has_more: boolean;
+    nextCursor?: string | null;
+    next_cursor?: string | null;
+    has_more?: boolean;
+    total?: number | null;
   }>("/api/jobs", {
     params: {
       ...rest,
@@ -52,6 +59,7 @@ export async function fetchJobs(params?: {
     jobs: data.data,
     nextCursor: data.nextCursor ?? data.next_cursor ?? null,
     hasMore: data.has_more ?? Boolean(data.nextCursor ?? data.next_cursor),
+    total: data.total ?? null,
   };
 }
 
@@ -96,7 +104,7 @@ export async function fetchRecentlyCompletedJobs(limit = 3): Promise<Job[]> {
  * @see backend/src/routes/jobs.js
  */
 export async function fetchJob(id: string, viewerAddress?: string) {
-  const { data } = await api.get<{ success: boolean; data: Job }>(
+  const { data } = await api.get<ApiJobDetailResponse & { data: Job }>(
     `/api/jobs/${id}`,
     {
       params: viewerAddress ? { viewerAddress } : undefined,
@@ -119,7 +127,7 @@ export async function createJob(payload: {
   visibility?: "public" | "private" | "invite_only";
   milestones?: { description: string; amount: string }[];
 }) {
-  const { data } = await api.post<{ success: boolean; data: Job }>(
+  const { data } = await api.post<ApiCreateJobResponse & { data: Job }>(
     "/api/jobs",
     payload,
   );
@@ -127,7 +135,7 @@ export async function createJob(payload: {
 }
 
 export async function fetchMyJobs(publicKey: string) {
-  const { data } = await api.get<{ success: boolean; data: Job[] }>(
+  const { data } = await api.get<ApiClientJobsResponse & { data: Job[] }>(
     `/api/jobs/client/${publicKey}`,
   );
   return data.data;
@@ -330,6 +338,25 @@ export async function deleteDraft(draftId: string) {
 
 // ─── Bulk Job Actions ───────────────────────────────────────────────────────
 
+/**
+ * Unified batch operation endpoint (Issue #869).
+ * Supports 'close' and 'delete' actions in a single DB transaction.
+ */
+export async function batchJobOperation(
+  action: "close" | "delete",
+  ids: string[]
+): Promise<{ succeeded: Array<{ id: string }>; failed: Array<{ id: string; error: string }> }> {
+  const { data } = await api.post<{
+    success: boolean;
+    succeeded: Array<{ id: string }>;
+    failed: Array<{ id: string; error: string }>;
+  }>(
+    "/api/jobs/batch",
+    { action, ids },
+  );
+  return { succeeded: data.succeeded, failed: data.failed };
+}
+
 export async function bulkCancelJobs(jobIds: string[]): Promise<BulkActionResponse> {
   const { data } = await api.post<{ success: boolean; data: BulkActionResponse }>(
     "/api/jobs/bulk-cancel",
@@ -347,7 +374,7 @@ export async function bulkExtendJobs(jobIds: string[], days: number): Promise<Bu
 }
 
 export async function bulkBoostJobs(jobIds: string[], txHash: string): Promise<BulkActionResponse> {
-  const { data } = await api.post<{ success: boolean; data: BulkActionResponse }>(
+  const { data} = await api.post<{ success: boolean; data: BulkActionResponse }>(
     "/api/jobs/bulk-boost",
     { jobIds, txHash },
   );

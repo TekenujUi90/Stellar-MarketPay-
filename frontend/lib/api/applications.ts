@@ -1,12 +1,30 @@
 import { api } from "./client";
 import type { Application } from "@/utils/types";
+import type { paths, components } from "./schema";
+
+export type ApiApplication = components["schemas"]["Application"];
+export type ApiApplicationsPageResponse = paths["/api/applications/job/{jobId}"]["get"]["responses"][200]["content"]["application/json"];
+export type ApiSubmitApplicationResponse = paths["/api/applications"]["post"]["responses"][201]["content"]["application/json"];
+export type ApiMyApplicationsResponse = { success?: boolean; data: ApiApplication[] };
+
+export async function fetchApplicationsPage(jobId: string, tier?: string, cursor?: string, limit = 20) {
+  if (!/^[a-zA-Z0-9-]+$/.test(jobId)) {
+    throw new Error("Invalid job ID");
+  }
+  const safeJobId = encodeURIComponent(jobId);
+  const { data } = await api.get<ApiApplicationsPageResponse & {
+    data: Application[];
+    applications?: Application[];
+    nextCursor: string | null;
+  }>(
+    `/api/applications/job/${safeJobId}`,
+    { params: { ...(tier ? { tier } : {}), limit, ...(cursor ? { cursor } : {}) } },
+  );
+  return { applications: data.applications ?? data.data, nextCursor: data.nextCursor };
+}
 
 export async function fetchApplications(jobId: string, tier?: string) {
-  const { data } = await api.get<{ success: boolean; data: Application[] }>(
-    `/api/applications/job/${jobId}`,
-    { params: tier ? { tier } : undefined },
-  );
-  return data.data;
+  return (await fetchApplicationsPage(jobId, tier)).applications;
 }
 
 export async function submitApplication(payload: {
@@ -20,7 +38,7 @@ export async function submitApplication(payload: {
   screeningAnswers?: Record<string, string>;
   referredBy?: string;
 }) {
-  const { data } = await api.post<{ success: boolean; data: Application }>(
+  const { data } = await api.post<ApiSubmitApplicationResponse & { data: Application }>(
     "/api/applications",
     payload,
   );
@@ -53,8 +71,26 @@ export async function acceptApplication(
 }
 
 export async function fetchMyApplications(publicKey: string) {
-  const { data } = await api.get<{ success: boolean; data: Application[] }>(
+  const { data } = await api.get<ApiMyApplicationsResponse & { data: Application[] }>(
     `/api/applications/freelancer/${publicKey}`,
   );
   return data.data;
 }
+
+export async function bulkUpdateApplications(payload: {
+  applicationIds: string[];
+  action: "reject" | "shortlist";
+  clientAddress: string;
+}) {
+  const { data } = await api.post<{
+    success: boolean;
+    data: {
+      updatedCount: number;
+      status: string;
+      jobId?: string;
+      applications: Application[];
+    };
+  }>("/api/applications/bulk-update", payload);
+  return data.data;
+}
+

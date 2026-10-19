@@ -21,6 +21,18 @@ jest.mock("../src/services/cacheService", () => ({
   set: jest.fn(),
 }));
 
+const mockGetLatestLedger = jest.fn();
+jest.mock("../src/services/sorobanClient", () => ({
+  getServer: () => ({
+    getLatestLedger: () => mockGetLatestLedger(),
+  }),
+}));
+
+const mockGetContractVersion = jest.fn();
+jest.mock("../src/services/contractVersionService", () => ({
+  getContractVersion: () => mockGetContractVersion(),
+}));
+
 // Mock fetch for Horizon checks
 const mockFetch = jest.fn();
 
@@ -82,6 +94,8 @@ function mockHorizonDown() {
 describe("GET /health", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetContractVersion.mockResolvedValue("1.2.0");
+    mockGetLatestLedger.mockResolvedValue({ sequence: 123 });
   });
 
   describe("all healthy", () => {
@@ -101,9 +115,30 @@ describe("GET /health", () => {
         database: "up",
         redis: "up",
         stellar: "up",
+        soroban: "up",
       });
       expect(res.body).toHaveProperty("uptime_seconds");
       expect(res.body).toHaveProperty("version");
+      expect(res.body.contractVersion).toBe("1.2.0");
+    });
+
+    it("reports contractVersion null without degrading when it cannot be read", async () => {
+      mockGetContractVersion.mockResolvedValue(null);
+      const app = createApp();
+      const res = await request(app).get("/api/health");
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("healthy");
+      expect(res.body).toHaveProperty("contractVersion", null);
+    });
+
+    it("reports contractVersion null when the lookup rejects", async () => {
+      mockGetContractVersion.mockRejectedValue(new Error("rpc down"));
+      const app = createApp();
+      const res = await request(app).get("/api/health");
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("contractVersion", null);
     });
   });
 
@@ -124,7 +159,9 @@ describe("GET /health", () => {
         database: "down",
         redis: "up",
         stellar: "up",
+        soroban: "up",
       });
+      expect(res.body.contractVersion).toBe("1.2.0");
     });
   });
 
@@ -135,7 +172,7 @@ describe("GET /health", () => {
       mockHorizonUp();
     });
 
-    it("returns 503 with status degraded and redis down", async () => {
+    it("returns 503 with status degraded and redis down (db still ok)", async () => {
       const app = createApp();
       const res = await request(app).get("/api/health");
 
@@ -145,6 +182,7 @@ describe("GET /health", () => {
         database: "up",
         redis: "down",
         stellar: "up",
+        soroban: "up",
       });
     });
   });
@@ -156,7 +194,7 @@ describe("GET /health", () => {
       mockHorizonDown();
     });
 
-    it("returns 503 with status degraded and stellar down", async () => {
+    it("returns 503 with status degraded and stellar down (db still ok)", async () => {
       const app = createApp();
       const res = await request(app).get("/api/health");
 
@@ -166,6 +204,7 @@ describe("GET /health", () => {
         database: "up",
         redis: "up",
         stellar: "down",
+        soroban: "up",
       });
     });
   });
@@ -187,6 +226,7 @@ describe("GET /health", () => {
         database: "down",
         redis: "down",
         stellar: "up",
+        soroban: "up",
       });
     });
   });

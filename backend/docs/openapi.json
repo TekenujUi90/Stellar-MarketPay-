@@ -195,6 +195,26 @@
     {
       "name": "Turrets",
       "description": "Stellar Turrets for serverless contract execution"
+    },
+    {
+      "name": "Sponsorship",
+      "description": "Gas fee sponsorship for verified onboarding freelancers"
+    },
+    {
+      "name": "Reputation",
+      "description": "Reputation scores for clients and freelancers"
+    },
+    {
+      "name": "JobTemplates",
+      "description": "Private job templates library for clients"
+    },
+    {
+      "name": "AutoConvert",
+      "description": "Opt-in XLM → USDC conversion of earnings"
+    },
+    {
+      "name": "Analytics",
+      "description": "Marketplace analytics and insights"
     }
   ],
   "components": {
@@ -216,6 +236,18 @@
         "in": "header",
         "name": "x-api-key",
         "description": "Developer API key for public API endpoints"
+      }
+    },
+    "responses": {
+      "TooManyRequests": {
+        "description": "Too many requests — rate limit exceeded",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       }
     },
     "schemas": {
@@ -320,6 +352,45 @@
           "expiresAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "PublicJob": {
+        "type": "object",
+        "description": "Syndication-safe job listing (no client address or applicant details)",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Job ID"
+          },
+          "title": {
+            "type": "string",
+            "description": "Job title"
+          },
+          "category": {
+            "type": "string",
+            "description": "Job category"
+          },
+          "budget": {
+            "type": "number",
+            "description": "Job budget"
+          },
+          "currency": {
+            "type": "string",
+            "description": "Payment currency"
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Required skills"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp"
           }
         }
       },
@@ -1468,6 +1539,9 @@
         "responses": {
           "201": {
             "description": "Time entry created"
+          },
+          "422": {
+            "description": "Hour cap exceeded — a single entry is over 24 h (1440 minutes), or the freelancer's total on this job in the trailing 7 days would exceed 168 h.\n"
           }
         }
       }
@@ -1732,6 +1806,74 @@
         }
       }
     },
+    "/api/sponsorship/account": {
+      "get": {
+        "summary": "Get platform sponsoring account public key",
+        "tags": [
+          "Sponsorship"
+        ],
+        "responses": {
+          "200": {
+            "description": "Platform sponsoring account public key"
+          }
+        }
+      }
+    },
+    "/api/sponsorship/status": {
+      "get": {
+        "summary": "Check eligibility and remaining sponsorship credits",
+        "tags": [
+          "Sponsorship"
+        ],
+        "responses": {
+          "200": {
+            "description": "Eligibility status and credits"
+          }
+        }
+      }
+    },
+    "/api/sponsorship/request": {
+      "post": {
+        "summary": "Request gas fee sponsorship for a transaction",
+        "tags": [
+          "Sponsorship"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "xdr"
+                ],
+                "properties": {
+                  "xdr": {
+                    "type": "string",
+                    "description": "Base64-encoded transaction XDR to be sponsored"
+                  },
+                  "freelancerId": {
+                    "type": "string",
+                    "description": "Optional freelancer public key if unauthenticated"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sponsored transaction envelope"
+          },
+          "400": {
+            "description": "Invalid XDR or missing parameters"
+          },
+          "403": {
+            "description": "Not eligible or credits exhausted"
+          }
+        }
+      }
+    },
     "/api/skills": {
       "get": {
         "summary": "Search skills for autocomplete",
@@ -1762,6 +1904,186 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/search": {
+      "get": {
+        "summary": "Platform-wide unified search across jobs, freelancers, and DAO proposals",
+        "tags": [
+          "Search"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search query term"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 5
+            },
+            "description": "Max results per entity type (1-20)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jobs": {
+                      "type": "array"
+                    },
+                    "freelancers": {
+                      "type": "array"
+                    },
+                    "proposals": {
+                      "type": "array"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scope/{sessionId}": {
+      "post": {
+        "summary": "Upsert a scope session",
+        "tags": [
+          "Scope"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "maxLength": 500000
+                  },
+                  "cursors": {
+                    "type": "object"
+                  },
+                  "finalized": {
+                    "type": "boolean"
+                  },
+                  "finalizedPayload": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scope session upserted successfully"
+          },
+          "400": {
+            "description": "Invalid input or missing sessionId"
+          },
+          "413": {
+            "description": "Payload Too Large"
+          }
+        }
+      },
+      "put": {
+        "summary": "Upsert a scope session",
+        "tags": [
+          "Scope"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "maxLength": 500000
+                  },
+                  "cursors": {
+                    "type": "object"
+                  },
+                  "finalized": {
+                    "type": "boolean"
+                  },
+                  "finalizedPayload": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scope session upserted successfully"
+          },
+          "400": {
+            "description": "Invalid input or missing sessionId"
+          },
+          "413": {
+            "description": "Payload Too Large"
+          }
+        }
+      },
+      "get": {
+        "summary": "Retrieve an active scope session",
+        "tags": [
+          "Scope"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active scope session details"
+          },
+          "404": {
+            "description": "Session not found or expired"
           }
         }
       }
@@ -1807,6 +2129,9 @@
           },
           "404": {
             "description": "Session not found or expired"
+          },
+          "413": {
+            "description": "Payload Too Large"
           }
         }
       }
@@ -1926,6 +2251,100 @@
         }
       }
     },
+    "/api/reputation/{userId}": {
+      "get": {
+        "summary": "Get a user's reputation score",
+        "tags": [
+          "Reputation"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Stellar public key (G...)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reputation score",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "userId": {
+                          "type": "string"
+                        },
+                        "score": {
+                          "type": "number",
+                          "description": "0–100"
+                        },
+                        "scoreBps": {
+                          "type": "integer",
+                          "description": "0–10000, for contract use"
+                        },
+                        "label": {
+                          "type": "string",
+                          "enum": [
+                            "New",
+                            "Building",
+                            "Established",
+                            "Trusted",
+                            "Excellent"
+                          ]
+                        },
+                        "completedJobs": {
+                          "type": "integer"
+                        },
+                        "disputeRate": {
+                          "type": "number",
+                          "description": "0–1"
+                        },
+                        "avgResponseHours": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "avgRating": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "ratingCount": {
+                          "type": "integer"
+                        },
+                        "referralQuality": {
+                          "type": "number",
+                          "description": "0–1"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid public key"
+          },
+          "404": {
+            "description": "No profile for this address"
+          }
+        }
+      }
+    },
     "/api/referrals/info": {
       "get": {
         "summary": "Get referral bonus info (public)",
@@ -1961,6 +2380,85 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/referrals/my-stats": {
+      "get": {
+        "summary": "Referral dashboard stats for the authenticated referrer",
+        "description": "Returns total referred users, pending and paid credits, the caller's referral link and a paginated table of referees with their pipeline status (registered / first_job_completed / credit_paid).\n",
+        "tags": [
+          "Referrals"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 10
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "registered",
+                "first_job_completed",
+                "credit_paid"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Referral dashboard stats"
+          },
+          "400": {
+            "description": "Invalid query parameter"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/referrals/stats": {
+      "get": {
+        "summary": "Get referral stats and total earned bonuses for the authenticated user",
+        "tags": [
+          "Referrals"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Referral stats"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         }
       }
@@ -2734,6 +3232,35 @@
             "description": "Can only update own profile"
           }
         }
+      },
+      "patch": {
+        "summary": "Update own profile (partial / avatar / bio update)",
+        "tags": [
+          "Profiles"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publicKey",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Profile updated"
+          },
+          "403": {
+            "description": "Can only update own profile"
+          }
+        }
       }
     },
     "/api/profiles/{publicKey}/stats": {
@@ -3111,6 +3638,77 @@
           },
           "403": {
             "description": "Can only delete own profile"
+          }
+        }
+      }
+    },
+    "/api/profiles/migrate": {
+      "post": {
+        "summary": "Merge an old Stellar account into a new one (identity migration)",
+        "description": "Proves ownership of BOTH accounts via ed25519 signatures over the\ncanonical challenge string `MARKETPAY-ACCOUNT-MERGE\\\\n<old>\\\\n<new>\\\\n<issuedAt>`\n(one signature per key, hex or base64). On success, in one transaction:\nprofile identity/reputation is carried to the new address, all history\ntables (jobs, applications, ratings, referrals, payouts, messages,\nprogress updates, dispute evidence, archives, certificates, push\nsubscriptions, API keys) are re-pointed old -> new, and the old\naddress is marked `migrated_to = new` (kept searchable; lookups of the\nold address report the redirect target).\n",
+        "tags": [
+          "Profiles"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "oldPublicKey",
+                  "newPublicKey",
+                  "oldSignature",
+                  "newSignature",
+                  "issuedAt"
+                ],
+                "properties": {
+                  "oldPublicKey": {
+                    "type": "string"
+                  },
+                  "newPublicKey": {
+                    "type": "string"
+                  },
+                  "oldSignature": {
+                    "type": "string",
+                    "description": "ed25519 signature of the challenge by the OLD secret key (hex/base64)"
+                  },
+                  "newSignature": {
+                    "type": "string",
+                    "description": "ed25519 signature of the challenge by the NEW secret key (hex/base64)"
+                  },
+                  "issuedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "ISO timestamp embedded in the challenge (10-minute validity)"
+                  },
+                  "network": {
+                    "type": "string",
+                    "enum": [
+                      "testnet",
+                      "mainnet"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Migration complete; returns per-table transferred-row counts"
+          },
+          "400": {
+            "description": "Validation error (bad address/signature format, expired challenge)"
+          },
+          "401": {
+            "description": "A signature does not prove ownership of its address"
+          },
+          "404": {
+            "description": "Old profile not found"
+          },
+          "409": {
+            "description": "Old address already migrated, or new address is itself migrated"
           }
         }
       }
@@ -3638,7 +4236,7 @@
         }
       },
       "get": {
-        "summary": "Get messages for a job thread",
+        "summary": "Get messages for a job thread with cursor-based pagination",
         "tags": [
           "Messages"
         ],
@@ -3656,11 +4254,28 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            },
+            "description": "Number of messages to return (1-100)"
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor timestamp to fetch messages older than"
           }
         ],
         "responses": {
           "200": {
-            "description": "Message list (marks as read)"
+            "description": "Message list with next cursor (marks as read)"
           }
         }
       }
@@ -3829,6 +4444,14 @@
           },
           {
             "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Full-text search query for job titles and descriptions"
+          },
+          {
+            "in": "query",
             "name": "cursor",
             "schema": {
               "type": "string"
@@ -3989,6 +4612,129 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/job-templates": {
+      "get": {
+        "summary": "List private job templates for the authenticated client",
+        "tags": [
+          "JobTemplates"
+        ],
+        "responses": {
+          "200": {
+            "description": "List of job templates"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "summary": "Save a job configuration as a reusable private template",
+        "tags": [
+          "JobTemplates"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "title"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "budget": {
+                    "type": "string"
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "skills": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created job template"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/job-templates/{id}": {
+      "get": {
+        "summary": "Get a specific job template",
+        "tags": [
+          "JobTemplates"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job template"
+          },
+          "404": {
+            "description": "Template not found"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a private job template",
+        "tags": [
+          "JobTemplates"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Template deleted"
+          },
+          "404": {
+            "description": "Template not found"
           }
         }
       }
@@ -4233,6 +4979,67 @@
         }
       }
     },
+    "/api/insights/earnings": {
+      "get": {
+        "summary": "Get freelancer monthly earnings breakdown",
+        "tags": [
+          "Insights"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "freelancerId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "months",
+            "schema": {
+              "type": "integer",
+              "default": 12
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Monthly freelancer earnings aggregation"
+          }
+        }
+      }
+    },
+    "/api/insights/earnings/{freelancerId}": {
+      "get": {
+        "summary": "Get earnings breakdown for a specific freelancer",
+        "tags": [
+          "Insights"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "freelancerId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "months",
+            "schema": {
+              "type": "integer",
+              "default": 12
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Monthly earnings aggregation for specific freelancer"
+          }
+        }
+      }
+    },
     "/api/health": {
       "get": {
         "summary": "Health check",
@@ -4252,16 +5059,20 @@
                       "type": "string",
                       "example": "healthy"
                     },
-                    "database": {
+                    "checks": {
                       "type": "object",
                       "properties": {
-                        "status": {
+                        "db": {
                           "type": "string",
                           "example": "ok"
                         },
-                        "latency_ms": {
-                          "type": "number",
-                          "example": 12
+                        "redis": {
+                          "type": "string",
+                          "example": "ok"
+                        },
+                        "stellar": {
+                          "type": "string",
+                          "example": "ok"
                         }
                       }
                     },
@@ -4290,6 +5101,12 @@
                       "type": "string",
                       "example": "1.0.0"
                     },
+                    "contractVersion": {
+                      "type": "string",
+                      "nullable": true,
+                      "example": "1.2.0",
+                      "description": "Semver of the deployed escrow contract (get_version()), null if unreadable"
+                    },
                     "migrationVersion": {
                       "type": "integer",
                       "nullable": true,
@@ -4302,7 +5119,7 @@
             }
           },
           "503": {
-            "description": "One or more dependencies are down"
+            "description": "One or more dependencies are down. When the database is unreachable, timed out, or throws, the body is a flattened degradation payload: { status: \"degraded\", checks: { db: \"error\", redis: \"ok\", stellar: \"ok\" }, contractVersion } otherwise the full degraded body is returned.\n"
           }
         }
       }
@@ -4393,10 +5210,19 @@
     },
     "/api/faucet/fund": {
       "post": {
-        "summary": "Fund a testnet wallet",
+        "summary": "Fund a Stellar testnet wallet via Friendbot",
+        "description": "Funds the given Stellar account with testnet XLM using Friendbot. Enforced testnet-only: if the configured Horizon URL is not a testnet URL (HORIZON_URL env var), the request is rejected with 403. If the account already has a non-zero native balance it is not re-funded (the service still responds 200, with `success: false` in the payload). Rate limited per IP and per wallet address. The per-IP limit is configurable via FAUCET_RATE_LIMIT (defaults to 20/min in development, 5/min in production), with a fixed 60-minute window. A strict per-wallet limit of 1 request per 24 hours is enforced in Redis to prevent draining testnet XLM through rotating proxies.\n",
         "tags": [
           "Faucet"
         ],
+        "x-rate-limit": {
+          "limit": 20,
+          "windowMinutes": 60
+        },
+        "x-rate-limit-wallet": {
+          "limit": 1,
+          "windowMinutes": 1440
+        },
         "requestBody": {
           "required": true,
           "content": {
@@ -4409,29 +5235,147 @@
                 "properties": {
                   "publicKey": {
                     "type": "string",
-                    "description": "Stellar public key to fund"
+                    "description": "Stellar public key (G...) to fund on testnet",
+                    "example": "GD5JQHFZLLM7H45AEB5S7M2E7EYQ3M3K5Y6R7B8C9D0E1F2G3H4I5J6K7L8M9N0O"
                   }
                 }
+              },
+              "example": {
+                "publicKey": "GD5JQHFZLLM7H45AEB5S7M2E7EYQ3M3K5Y6R7B8C9D0E1F2G3H4I5J6K7L8M9N0O"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Wallet funded successfully"
+            "description": "Funding attempted. `data.success` is `false` (with no error status) when the account already holds a non-zero XLM balance and Friendbot was not called.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "fundedAmount": {
+                          "type": "string"
+                        },
+                        "newBalance": {
+                          "type": "string"
+                        },
+                        "currentBalance": {
+                          "type": "string"
+                        },
+                        "transactionHash": {
+                          "type": "string"
+                        },
+                        "ledger": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "funded": {
+                    "summary": "Newly funded account",
+                    "value": {
+                      "success": true,
+                      "data": {
+                        "success": true,
+                        "message": "Successfully funded testnet wallet",
+                        "fundedAmount": "10000.0000000",
+                        "newBalance": "10000.0000000",
+                        "transactionHash": "a1b2c3d4e5f6",
+                        "ledger": 123456
+                      }
+                    }
+                  },
+                  "alreadyFunded": {
+                    "summary": "Account already has a balance",
+                    "value": {
+                      "success": true,
+                      "data": {
+                        "success": false,
+                        "message": "Account already has testnet XLM balance",
+                        "currentBalance": "9500.0000000",
+                        "fundedAmount": "0"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
-            "description": "Missing public key"
+            "description": "Missing publicKey, or Friendbot rejected the address as invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Public key is required"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Faucet only available on testnet"
+            "description": "Faucet is disabled because the server is not configured for testnet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Faucet only available on testnet"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "description": "Unexpected error while funding the wallet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Unable to connect to the Stellar testnet Horizon server",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Unable to connect to Stellar testnet"
+                }
+              }
+            }
           }
         }
       }
     },
     "/api/faucet/check/{publicKey}": {
       "get": {
-        "summary": "Check if an account needs funding",
+        "summary": "Check whether a testnet account needs funding",
+        "description": "Looks up the account's current native XLM balance on the configured Horizon server and reports whether it needs funding (balance is zero or the account does not exist yet). Enforced testnet-only, like POST /api/faucet/fund. The same shared IP + public-key limiter is applied to this route.\n",
         "tags": [
           "Faucet"
         ],
@@ -4442,15 +5386,101 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Stellar public key (G...) to check",
+            "example": "GD5JQHFZLLM7H45AEB5S7M2E7EYQ3M3K5Y6R7B8C9D0E1F2G3H4I5J6K7L8M9N0O"
           }
         ],
         "responses": {
           "200": {
-            "description": "Account funding status"
+            "description": "Account funding status retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "needsFunding": {
+                          "type": "boolean"
+                        },
+                        "currentBalance": {
+                          "type": "string"
+                        },
+                        "exists": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "existingFundedAccount": {
+                    "summary": "Account exists and already has a balance",
+                    "value": {
+                      "success": true,
+                      "data": {
+                        "needsFunding": false,
+                        "currentBalance": "9500.0000000",
+                        "exists": true
+                      }
+                    }
+                  },
+                  "nonExistentAccount": {
+                    "summary": "Account has not been created on-chain yet",
+                    "value": {
+                      "success": true,
+                      "data": {
+                        "needsFunding": true,
+                        "currentBalance": "0",
+                        "exists": false
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Public key missing or not a valid Stellar address",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Public key is required"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Faucet only available on testnet"
+            "description": "Faucet is disabled because the server is not configured for testnet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Faucet only available on testnet"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected error while checking the account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -4458,40 +5488,59 @@
     "/api/faucet/status": {
       "get": {
         "summary": "Get faucet status and configuration",
+        "description": "Returns static faucet configuration: whether the faucet is enabled (true only when the server is configured against a testnet Horizon URL), the network name, the fixed Friendbot funding amount, the asset, and the currently effective per-minute rate limit. Has no auth or rate-limit middleware.\n",
         "tags": [
           "Faucet"
         ],
         "responses": {
           "200": {
-            "description": "Faucet status",
+            "description": "Faucet status retrieved",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "success": {
-                      "type": "boolean"
+                      "type": "boolean",
+                      "example": true
                     },
                     "data": {
                       "type": "object",
                       "properties": {
                         "enabled": {
-                          "type": "boolean"
+                          "type": "boolean",
+                          "description": "True only when the Horizon URL points at testnet"
                         },
                         "network": {
-                          "type": "string"
+                          "type": "string",
+                          "example": "testnet"
                         },
                         "amount": {
-                          "type": "string"
+                          "type": "string",
+                          "description": "Amount of XLM Friendbot funds per request",
+                          "example": "10000"
                         },
                         "asset": {
-                          "type": "string"
+                          "type": "string",
+                          "example": "XLM"
                         },
                         "rateLimitPerMinute": {
-                          "type": "integer"
+                          "type": "integer",
+                          "description": "Effective FAUCET_RATE_LIMIT applied to POST /api/faucet/fund",
+                          "example": 20
                         }
                       }
                     }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "enabled": true,
+                    "network": "testnet",
+                    "amount": "10000",
+                    "asset": "XLM",
+                    "rateLimitPerMinute": 20
                   }
                 }
               }
@@ -4577,6 +5626,33 @@
         }
       }
     },
+    "/api/disputes/{jobId}/events": {
+      "get": {
+        "summary": "Get dispute timeline events in chronological order",
+        "tags": [
+          "Disputes"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Timeline events ordered oldest first"
+          },
+          "404": {
+            "description": "Job not found"
+          }
+        }
+      }
+    },
     "/api/disputes/{jobId}/evidence": {
       "post": {
         "summary": "Upload dispute evidence file",
@@ -4627,6 +5703,41 @@
           },
           "403": {
             "description": "Only client or freelancer can upload"
+          }
+        }
+      },
+      "get": {
+        "summary": "List dispute evidence (client, freelancer, or arbitrator only)",
+        "tags": [
+          "Disputes"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Evidence list for the dispute"
+          },
+          "401": {
+            "description": "Missing or invalid JWT"
+          },
+          "403": {
+            "description": "Caller is not the client, freelancer, or assigned arbitrator"
+          },
+          "404": {
+            "description": "Job not found"
           }
         }
       }
@@ -4797,11 +5908,27 @@
                 "expired"
               ]
             }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "description": "Page size (1-100). Enables cursor pagination; response includes nextCursor.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "description": "Opaque cursor from a previous page's nextCursor.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Proposal list"
+            "description": "Proposal list (plus nextCursor when paginated)"
           }
         }
       },
@@ -5209,6 +6336,313 @@
         }
       }
     },
+    "/api/auto-convert/settings": {
+      "get": {
+        "summary": "Get auto-convert settings for the authenticated user",
+        "tags": [
+          "AutoConvert"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Settings"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update auto-convert settings",
+        "tags": [
+          "AutoConvert"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "slippageBps": {
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 1000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated settings"
+          }
+        }
+      }
+    },
+    "/api/auto-convert/pending": {
+      "get": {
+        "summary": "List pending XLM → USDC conversions with fresh path quotes",
+        "tags": [
+          "AutoConvert"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending conversions"
+          }
+        }
+      }
+    },
+    "/api/auto-convert/history": {
+      "get": {
+        "summary": "Paginated auto-conversion payment history",
+        "tags": [
+          "AutoConvert"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conversion history"
+          }
+        }
+      }
+    },
+    "/api/auto-convert/quote": {
+      "post": {
+        "summary": "Live XLM → USDC swap quote (rate, estimated receive, fee)",
+        "tags": [
+          "AutoConvert"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "amountXlm"
+                ],
+                "properties": {
+                  "amountXlm": {
+                    "type": "string"
+                  },
+                  "slippageBps": {
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 1000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Swap quote"
+          },
+          "400": {
+            "description": "Invalid amount or slippage"
+          },
+          "404": {
+            "description": "No XLM → USDC path available"
+          }
+        }
+      }
+    },
+    "/api/auto-convert/manual": {
+      "post": {
+        "summary": "Start a manual XLM → USDC \"Swap earnings\" swap",
+        "description": "Creates a pending swap the wallet signs with pathPaymentStrictSend.",
+        "tags": [
+          "AutoConvert"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "amountXlm"
+                ],
+                "properties": {
+                  "amountXlm": {
+                    "type": "string"
+                  },
+                  "slippageBps": {
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 1000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pending swap with quote"
+          },
+          "400": {
+            "description": "Invalid amount or slippage"
+          },
+          "404": {
+            "description": "Profile not found or no path available"
+          }
+        }
+      }
+    },
+    "/api/auto-convert/{id}/complete": {
+      "post": {
+        "summary": "Record a submitted pathPaymentStrictSend swap",
+        "description": "Verifies the transaction on Horizon and stores amounts and exchange rate.",
+        "tags": [
+          "AutoConvert"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "txHash"
+                ],
+                "properties": {
+                  "txHash": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Conversion recorded"
+          },
+          "400": {
+            "description": "Transaction does not match the pending conversion"
+          },
+          "409": {
+            "description": "Conversion is not pending or tx already recorded"
+          }
+        }
+      }
+    },
+    "/api/auto-convert/{id}/dismiss": {
+      "post": {
+        "summary": "Mark a pending conversion as failed or skipped",
+        "tags": [
+          "AutoConvert"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "failed",
+                      "skipped"
+                    ]
+                  },
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Conversion dismissed"
+          }
+        }
+      }
+    },
     "/api/auth/csrf-token": {
       "get": {
         "summary": "Issue a CSRF token for double-submit protection",
@@ -5414,13 +6848,22 @@
         "responses": {
           "200": {
             "description": "Audit log entries"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
           }
         }
       }
     },
     "/api/audit/{jobId}": {
       "get": {
-        "summary": "Get audit logs for a specific job",
+        "summary": "Get audit logs for a specific job (admin only)",
         "tags": [
           "Audit"
         ],
@@ -5443,8 +6886,14 @@
           "200": {
             "description": "Job audit logs"
           },
+          "401": {
+            "description": "Unauthenticated"
+          },
           "403": {
-            "description": "Not a participant or admin"
+            "description": "Admin access required"
+          },
+          "429": {
+            "description": "Too many requests — rate limit exceeded"
           }
         }
       }
@@ -5697,6 +7146,110 @@
         }
       }
     },
+    "/api/analytics/categories": {
+      "get": {
+        "summary": "Get marketplace statistics per job category",
+        "tags": [
+          "Analytics"
+        ],
+        "responses": {
+          "200": {
+            "description": "List of category statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "category": {
+                            "type": "string"
+                          },
+                          "jobCount": {
+                            "type": "integer"
+                          },
+                          "avgBudgetXLM": {
+                            "type": "number"
+                          },
+                          "filledCount": {
+                            "type": "integer"
+                          },
+                          "avgDaysToFill": {
+                            "type": "number",
+                            "nullable": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analytics/overview": {
+      "get": {
+        "summary": "Get platform totals and status breakdown",
+        "tags": [
+          "Analytics"
+        ],
+        "responses": {
+          "200": {
+            "description": "Platform-wide overview totals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "totalJobs": {
+                          "type": "integer"
+                        },
+                        "openJobs": {
+                          "type": "integer"
+                        },
+                        "inProgressJobs": {
+                          "type": "integer"
+                        },
+                        "completedJobs": {
+                          "type": "integer"
+                        },
+                        "cancelledJobs": {
+                          "type": "integer"
+                        },
+                        "totalVolumeXLM": {
+                          "type": "number"
+                        },
+                        "avgJobBudgetXLM": {
+                          "type": "number"
+                        },
+                        "avgDaysToFill": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/ai/score-job": {
       "post": {
         "summary": "Score a job description using AI",
@@ -5729,6 +7282,57 @@
             "description": "AI API not configured"
           }
         }
+      }
+    },
+    "/api/ai-scorer/score-proposal": {
+      "post": {
+        "summary": "Score a freelancer proposal for relevance, clarity and completeness",
+        "tags": [
+          "AI Scorer"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "proposal"
+                ],
+                "properties": {
+                  "proposal": {
+                    "type": "string"
+                  },
+                  "jobTitle": {
+                    "type": "string"
+                  },
+                  "jobDescription": {
+                    "type": "string"
+                  },
+                  "skills": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Relevance, clarity and completeness scores (0–100). A `warning` is returned instead of an error when the AI is unavailable."
+          },
+          "400": {
+            "description": "Proposal text required"
+          }
+        }
+      }
+    },
+    "/api/ai-scorer/score": {
+      "post": {
+        "summary": "Score a single proposal (Issue"
       }
     },
     "/api/admin/2fa/setup": {

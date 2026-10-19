@@ -384,6 +384,18 @@
                       "key": {
                         "vec": [
                           {
+                            "symbol": "ContractVersion"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "string": "1.0.0"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
                             "symbol": "DefaultTimeoutSeconds"
                           }
                         ]
@@ -595,6 +607,18 @@
                       },
                       "val": {
                         "u32": 1
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "ExecutionDelaySeconds"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u64": "172800"
                       }
                     },
                     {
