@@ -1,6 +1,9 @@
 name: E2E & Accessibility
 
 on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
   push:
     branches: [main, develop]
   pull_request:
@@ -41,6 +44,13 @@ jobs:
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
+
+      - name: Audit public and authenticated pages in both themes
+        run: npx playwright test tests/e2e/accessibility.spec.ts --project=chromium --project=chromium-dark
+
+      - name: Run complete nightly suite in both themes
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: npx playwright test --project=chromium --project=chromium-dark
 
       - name: Run E2E tests (chromium)
         run: npx playwright test tests/e2e/freelancer-onboarding.spec.ts tests/e2e/full-marketplace-flow.spec.ts --project=chromium --pass-with-no-tests
